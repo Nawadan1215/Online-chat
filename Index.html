@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>共有チャット</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- PouchDB CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/pouchdb@8.0.1/dist/pouchdb.min.js"></script>
+</head>
+<body class="bg-gray-100 flex flex-col h-screen">
+  <div class="bg-blue-600 text-white p-4 text-center">
+    <h1 class="text-2xl font-bold">オンラインチャット</h1>
+    <p class="text-sm">ベータ</p>
+  </div>
+  <div class="flex-1 p-4 overflow-y-auto" id="messages"></div>
+  <div class="bg-white p-4 border-t">
+    <form id="messageForm" class="flex gap-2">
+      <input
+        type="text"
+        id="username"
+        placeholder="ユーザー名"
+        class="border p-2 rounded flex-1"
+        required
+      />
+      <input
+        type="text"
+        id="message"
+        placeholder="メッセージを入力"
+        class="border p-2 rounded flex-1"
+        required
+      />
+      <button
+        type="submit"
+        class="bg-blue-600 text-white p-2 rounded hover:bg-blue-700"
+      >
+        送信
+      </button>
+    </form>
+  </div>
+
+  <script>
+    // PouchDB設定
+    const localDB = new PouchDB('chat');
+    const remoteDB = new PouchDB('https://your-couchdb-instance.com/chat', {
+      auth: { username: 'your-username', password: 'your-password' } // CouchDB認証
+    });
+
+    // リアルタイム同期
+    localDB.sync(remoteDB, { live: true, retry: true }).on('change', loadMessages);
+
+    // メッセージ保存
+    async function saveMessage(username, text) {
+      try {
+        await localDB.put({
+          _id: new Date().toISOString(),
+          username,
+          text,
+          timestamp: Date.now()
+        });
+      } catch (err) {
+        console.error('保存エラー:', err);
+      }
+    }
+
+    // メッセージ取得
+    async function loadMessages() {
+      try {
+        const result = await localDB.allDocs({ include_docs: true });
+        const messagesDiv = document.getElementById('messages');
+        messagesDiv.innerHTML = '';
+        result.rows.forEach(row => {
+          const msg = row.doc;
+          const time = new Date(msg.timestamp).toLocaleTimeString('ja-JP');
+          const div = document.createElement('div');
+          div.className = 'p-2 border-b';
+          div.innerHTML = `<strong>${msg.username}</strong> (${time}): ${msg.text}`;
+          messagesDiv.appendChild(div);
+        });
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+      } catch (err) {
+        console.error('読み込みエラー:', err);
+      }
+    }
+
+    // フォーム送信
+    document.getElementById('messageForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const username = document.getElementById('username').value;
+      const message = document.getElementById('message').value;
+      await saveMessage(username, message);
+      document.getElementById('message').value = '';
+    });
+
+    // 初期ロード
+    loadMessages();
+  </script>
+</body>
+</html>
